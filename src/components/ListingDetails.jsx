@@ -36,6 +36,7 @@ export function ListingDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
+  const [contactError, setContactError] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -85,6 +86,50 @@ export function ListingDetails() {
       </div>
     );
   }
+
+  const handleContact = (type) => {
+    if (!listing?.landlord) {
+      setContactError('Landlord details are not available right now.');
+      return;
+    }
+
+    const { email, phone, name } = listing.landlord;
+    const subject = encodeURIComponent(`StayShare enquiry about ${listing.title}`);
+  const greetingName = name ? name.split(' ')[0] : 'there';
+  const body = encodeURIComponent(`Hi ${greetingName},
+
+I found your listing "${listing.title}" on StayShare and would love to discuss details.
+
+Thanks!`);
+
+    setContactError('');
+
+    if (type === 'email') {
+      if (email) {
+        window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+        return;
+      }
+      if (phone) {
+        setContactError('Email not available. Calling instead.');
+        window.location.href = `tel:${phone}`;
+        return;
+      }
+    }
+
+    if (type === 'phone') {
+      if (phone) {
+        window.location.href = `tel:${phone}`;
+        return;
+      }
+      if (email) {
+        setContactError('Phone number missing. Sending email instead.');
+        window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+        return;
+      }
+    }
+
+    setContactError('The host has not shared direct contact details yet.');
+  };
 
   return (
     <div className="min-h-screen bg-muted/30 py-8">
@@ -366,7 +411,11 @@ export function ListingDetails() {
                       <Button asChild className="w-full">
                         <Link to={`/booking/${listing._id}`}>Book Viewing</Link>
                       </Button>
-                      <Button variant="outline" className="w-full">
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => handleContact('email')}
+                      >
                         <Mail className="h-4 w-4 mr-2" />
                         Contact Landlord
                       </Button>
@@ -377,6 +426,9 @@ export function ListingDetails() {
                     </Button>
                   )}
                 </div>
+                {contactError && (
+                  <p className="text-xs text-destructive text-center mt-2">{contactError}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -413,7 +465,11 @@ export function ListingDetails() {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" className="w-full mt-4">
+                <Button
+                  variant="outline"
+                  className="w-full mt-4"
+                  onClick={() => handleContact('phone')}
+                >
                   <Phone className="h-4 w-4 mr-2" />
                   Contact Host
                 </Button>
