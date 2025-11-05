@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -67,15 +67,36 @@ export function Listings() {
   const [filters, setFilters] = useState({
     search: '',
     location: 'all',
-  priceRange: [0, 0],
+    priceRange: [0, 0],
     roomType: 'all',
     bedrooms: 'all'
   });
   const [savedListings, setSavedListings] = useState([]);
 
   const handleFilterChange = (key, value) => {
-    setFilters({ ...filters, [key]: value });
+    setFilters((prev) => ({
+      ...prev,
+      [key]: key === 'priceRange' ? [...value] : value
+    }));
   };
+
+  const effectiveMinPrice = filters.priceRange[0] || priceBounds.min || 0;
+  const effectiveMaxPrice = filters.priceRange[1] || priceBounds.max || Number.MAX_SAFE_INTEGER;
+  const priceStep = useMemo(() => {
+    const span = priceBounds.max - priceBounds.min;
+    if (span <= 0) return 1000;
+    const roughStep = Math.max(500, Math.round(span / 60 / 500) * 500);
+    return roughStep || 1000;
+  }, [priceBounds.max, priceBounds.min]);
+  const sliderValue = useMemo(() => {
+    if (Array.isArray(filters.priceRange) && filters.priceRange.length === 2) {
+      return filters.priceRange;
+    }
+    const fallbackMax = effectiveMaxPrice === Number.MAX_SAFE_INTEGER
+      ? Math.max(priceBounds.max, priceBounds.min + 1)
+      : effectiveMaxPrice;
+    return [effectiveMinPrice, fallbackMax];
+  }, [effectiveMaxPrice, effectiveMinPrice, filters.priceRange, priceBounds.max, priceBounds.min]);
 
   const toggleSaved = (listingId) => {
     setSavedListings(prev => 
@@ -90,7 +111,8 @@ export function Listings() {
     const matchesSearch = (listing.title || '').toLowerCase().includes(filters.search.toLowerCase()) ||
                          loc.includes(filters.search.toLowerCase());
     const matchesLocation = filters.location === 'all' || loc.includes(filters.location.toLowerCase());
-    const matchesPrice = (listing.price || 0) >= filters.priceRange[0] && (listing.price || 0) <= filters.priceRange[1];
+    const priceValue = Number(listing.price) || 0;
+    const matchesPrice = priceValue >= effectiveMinPrice && priceValue <= effectiveMaxPrice;
     const matchesRoomType = filters.roomType === 'all' || (listing.roomType || '').toLowerCase().includes(filters.roomType);
     const matchesBedrooms = filters.bedrooms === 'all' || String(listing.bedrooms) === filters.bedrooms;
     return matchesSearch && matchesLocation && matchesPrice && matchesRoomType && matchesBedrooms;
@@ -170,19 +192,18 @@ export function Listings() {
                 <Label>Price Range (₹/month)</Label>
                 <div className="px-3">
                   <Slider
-                    value={filters.priceRange}
+                    value={sliderValue}
                     onValueChange={(value) => handleFilterChange('priceRange', value)}
                     max={Math.max(priceBounds.max, priceBounds.min + 1)}
                     min={priceBounds.min || 0}
-                    step={1000}
+                    step={priceStep}
                     className="w-full"
-                    minStepsBetweenThumbs={1000}
                     disabled={priceBounds.max <= priceBounds.min}
                   />
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>₹{filters.priceRange[0] || priceBounds.min}</span>
-                  <span>₹{filters.priceRange[1] || priceBounds.max}</span>
+                  <span>₹{effectiveMinPrice}</span>
+                  <span>₹{effectiveMaxPrice === Number.MAX_SAFE_INTEGER ? priceBounds.max : effectiveMaxPrice}</span>
                 </div>
               </div>
 
@@ -331,7 +352,7 @@ export function Listings() {
               onClick={() => setFilters({
                 search: '',
                 location: 'all',
-                priceRange: [15000, 100000],
+                priceRange: [priceBounds.min, Math.max(priceBounds.max, priceBounds.min + 1)],
                 roomType: 'all',
                 bedrooms: 'all'
               })}
