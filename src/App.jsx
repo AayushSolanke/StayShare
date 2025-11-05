@@ -12,6 +12,7 @@ import { RoommateProfile } from './components/RoommateProfile';
 import { PostRoommateRequest } from './components/PostRoommateRequest';
 import { Navbar } from './components/Navbar';
 import { CreateListing } from './components/CreateListing';
+import HostDashboard from './components/HostDashboard';
 import apiService from './services/api';
 
 // Auth Context
@@ -29,6 +30,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const isLandlord = user?.role === 'landlord';
 
   // Check if user is already logged in on app start
   useEffect(() => {
@@ -116,7 +118,8 @@ function App() {
       register, 
       logout, 
       updateUser,
-      isLoading 
+      isLoading,
+      isLandlord
     }}>
       <Router>
         <div className="min-h-screen bg-background">
@@ -127,7 +130,24 @@ function App() {
             <Route path="/profile" element={isAuthenticated ? <UserProfile /> : <Navigate to="/auth" />} />
             <Route path="/listings" element={<Listings />} />
             <Route path="/listing/:id" element={<ListingDetails />} />
-            <Route path="/create-listing" element={isAuthenticated ? <CreateListing /> : <Navigate to="/auth" />} />
+            <Route
+              path="/create-listing"
+              element={
+                isAuthenticated
+                  ? <CreateListing />
+                  : <Navigate to="/auth" />
+              }
+            />
+            <Route
+              path="/host"
+              element={
+                isAuthenticated
+                  ? isLandlord
+                    ? <HostDashboard />
+                    : <Navigate to="/" />
+                  : <Navigate to="/auth" />
+              }
+            />
             <Route path="/booking/:id" element={isAuthenticated ? <Booking /> : <Navigate to="/auth" />} />
             <Route path="/my-bookings" element={isAuthenticated ? <MyBookings /> : <Navigate to="/auth" />} />
             <Route path="/roommates" element={<RoommatesListing />} />

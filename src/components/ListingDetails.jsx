@@ -74,6 +74,8 @@ export function ListingDetails() {
     );
   }
 
+  const isListingActive = listing.isActive !== false;
+
   if (error || !listing) {
     return (
       <div className="min-h-screen bg-muted/30 py-8">
@@ -187,7 +189,12 @@ Thanks!`);
             <div className="mb-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h1 className="text-3xl font-medium text-foreground mb-2">{listing.title}</h1>
+                  <div className="flex items-center gap-3 mb-2">
+                    <h1 className="text-3xl font-medium text-foreground">{listing.title}</h1>
+                    <Badge variant={isListingActive ? 'default' : 'destructive'}>
+                      {isListingActive ? 'Open' : 'Full'}
+                    </Badge>
+                  </div>
                   <div className="flex items-center text-muted-foreground mb-2">
                     <MapPin className="h-4 w-4 mr-1" />
                     <span>{listing.location}</span>
@@ -395,9 +402,14 @@ Thanks!`);
             {/* Booking Card */}
             <Card>
               <CardContent className="pt-6">
-                <div className="text-center mb-4">
-                  <span className="text-3xl font-medium text-foreground">₹{listing.price}</span>
-                  <span className="text-muted-foreground">/month</span>
+                <div className="text-center mb-4 space-y-2">
+                  <div>
+                    <span className="text-3xl font-medium text-foreground">₹{listing.price}</span>
+                    <span className="text-muted-foreground">/month</span>
+                  </div>
+                  {!isListingActive && (
+                    <p className="text-xs text-destructive">This listing is currently marked as full. Check back soon or explore other options.</p>
+                  )}
                 </div>
                 {listing.availableFrom && (
                   <div className="flex items-center justify-center text-muted-foreground mb-4">
@@ -408,13 +420,22 @@ Thanks!`);
                 <div className="space-y-3">
                   {isAuthenticated ? (
                     <>
-                      <Button asChild className="w-full">
-                        <Link to={`/booking/${listing._id}`}>Book Viewing</Link>
+                      <Button
+                        asChild={isListingActive}
+                        className="w-full"
+                        disabled={!isListingActive}
+                      >
+                        {isListingActive ? (
+                          <Link to={`/booking/${listing._id}`}>Book Viewing</Link>
+                        ) : (
+                          <span>No viewings available</span>
+                        )}
                       </Button>
                       <Button
                         variant="outline"
                         className="w-full"
                         onClick={() => handleContact('email')}
+                        disabled={!isListingActive}
                       >
                         <Mail className="h-4 w-4 mr-2" />
                         Contact Landlord

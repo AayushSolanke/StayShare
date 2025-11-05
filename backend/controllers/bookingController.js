@@ -14,7 +14,14 @@ export const getUserBookings = async (req, res) => {
     }
 
     const bookings = await Booking.find(query)
-      .populate('listing', 'title location price images')
+      .populate({
+        path: 'listing',
+        select: 'title location price images landlord',
+        populate: {
+          path: 'landlord',
+          select: 'name email phone'
+        }
+      })
       .populate('user', 'name email phone')
       .sort({ createdAt: -1 });
 
@@ -129,7 +136,14 @@ export const createBooking = async (req, res) => {
       phoneNumber
     });
 
-    await booking.populate('listing', 'title location price images');
+    await booking.populate({
+      path: 'listing',
+      select: 'title location price images landlord',
+      populate: {
+        path: 'landlord',
+        select: 'name email phone'
+      }
+    });
     await booking.populate('user', 'name email phone');
 
     res.status(201).json({
@@ -182,6 +196,14 @@ export const updateBookingStatus = async (req, res) => {
 
     await booking.save();
     await booking.populate('user', 'name email phone');
+    await booking.populate({
+      path: 'listing',
+      select: 'title location price images landlord',
+      populate: {
+        path: 'landlord',
+        select: 'name email phone'
+      }
+    });
 
     res.json({
       success: true,
@@ -230,6 +252,14 @@ export const cancelBooking = async (req, res) => {
 
     booking.status = 'cancelled';
     await booking.save();
+    await booking.populate({
+      path: 'listing',
+      select: 'title location price images landlord',
+      populate: {
+        path: 'landlord',
+        select: 'name email phone'
+      }
+    });
 
     res.json({
       success: true,
@@ -264,7 +294,14 @@ export const getLandlordBookings = async (req, res) => {
     }
 
     const bookings = await Booking.find(query)
-      .populate('listing', 'title location price images')
+      .populate({
+        path: 'listing',
+        select: 'title location price images landlord',
+        populate: {
+          path: 'landlord',
+          select: 'name email phone'
+        }
+      })
       .populate('user', 'name email phone')
       .sort({ createdAt: -1 });
 

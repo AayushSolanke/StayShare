@@ -26,12 +26,36 @@ export function Listings() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [priceBounds, setPriceBounds] = useState({ min: 0, max: 0 });
 
   useEffect(() => {
     const load = async () => {
       try {
         const res = await apiService.getListings();
-        if (res.success) setListings(res.data);
+        if (res.success) {
+          setListings(res.data);
+
+          if (Array.isArray(res.data) && res.data.length > 0) {
+            const prices = res.data
+              .map((item) => Number(item.price) || 0)
+              .filter((value) => value >= 0);
+
+            if (prices.length > 0) {
+              const minPrice = Math.min(...prices);
+              const maxPrice = Math.max(...prices);
+
+              setPriceBounds({
+                min: minPrice,
+                max: maxPrice
+              });
+
+              setFilters((prev) => ({
+                ...prev,
+                priceRange: [minPrice, maxPrice]
+              }));
+            }
+          }
+        }
       } catch (e) {
         setError(e.message || 'Failed to load listings');
       } finally {
@@ -43,7 +67,7 @@ export function Listings() {
   const [filters, setFilters] = useState({
     search: '',
     location: 'all',
-    priceRange: [15000, 100000],
+  priceRange: [0, 0],
     roomType: 'all',
     bedrooms: 'all'
   });
@@ -148,15 +172,17 @@ export function Listings() {
                   <Slider
                     value={filters.priceRange}
                     onValueChange={(value) => handleFilterChange('priceRange', value)}
-                    max={100000}
-                    min={15000}
-                    step={5000}
+                    max={Math.max(priceBounds.max, priceBounds.min + 1)}
+                    min={priceBounds.min || 0}
+                    step={1000}
                     className="w-full"
+                    minStepsBetweenThumbs={1000}
+                    disabled={priceBounds.max <= priceBounds.min}
                   />
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>₹{filters.priceRange[0]}</span>
-                  <span>₹{filters.priceRange[1]}</span>
+                  <span>₹{filters.priceRange[0] || priceBounds.min}</span>
+                  <span>₹{filters.priceRange[1] || priceBounds.max}</span>
                 </div>
               </div>
 

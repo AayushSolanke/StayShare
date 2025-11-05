@@ -90,6 +90,13 @@ class ApiService {
     });
   }
 
+  async patch(endpoint, data) {
+    return this.request(endpoint, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Authentication methods
   async register(userData) {
     const response = await this.post('/auth/register', userData);
@@ -150,6 +157,14 @@ class ApiService {
 
   async deleteListing(id) {
     return this.delete(`/listings/${id}`);
+  }
+
+  async getMyListings() {
+    return this.get('/listings/owner/me');
+  }
+
+  async updateListingStatus(id, statusData) {
+    return this.patch(`/listings/${id}/status`, statusData);
   }
 
   // Bookings methods

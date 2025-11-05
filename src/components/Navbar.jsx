@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { useAuth } from '../App';
-import { Home, Search, Users, Calendar, User, LogOut, Plus } from 'lucide-react';
+import { Home, Search, Users, Calendar, User, LogOut, Plus, LayoutDashboard } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,10 @@ export function Navbar() {
     { path: '/my-bookings', label: 'My Bookings', icon: Calendar },
     { path: '/post-roommate', label: 'Post Request', icon: Plus },
   ];
+
+  const landlordItems = user?.role === 'landlord'
+    ? [{ path: '/host', label: 'Host', icon: LayoutDashboard }]
+    : [];
 
   return (
     <nav className="bg-white border-b border-border sticky top-0 z-50">
@@ -66,7 +70,7 @@ export function Navbar() {
               );
             })}
 
-            {isAuthenticated && authenticatedItems.map((item) => {
+            {isAuthenticated && [...landlordItems, ...authenticatedItems].map((item) => {
               const Icon = item.icon;
               return (
                 <Link
@@ -126,7 +130,7 @@ export function Navbar() {
         {isAuthenticated && (
           <div className="md:hidden border-t border-border">
             <div className="flex justify-around py-2">
-              {[...navItems, ...authenticatedItems].map((item) => {
+              {[...navItems, ...landlordItems, ...authenticatedItems].map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link

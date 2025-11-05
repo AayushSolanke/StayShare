@@ -6,9 +6,11 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import apiService from '../services/api';
+import { useAuth } from '../App';
 
 export function CreateListing() {
   const navigate = useNavigate();
+  const { updateUser } = useAuth();
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -29,16 +31,46 @@ export function CreateListing() {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!img.trim()) {
+      setError('Please provide at least one image URL for your listing.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const payload = { ...form, price: Number(form.price), bedrooms: Number(form.bedrooms), bathrooms: Number(form.bathrooms) };
-      if (img) payload.images = [img];
+      const payload = {
+        ...form,
+        price: Number(form.price),
+        bedrooms: Number(form.bedrooms),
+        bathrooms: Number(form.bathrooms)
+      };
+
+      payload.images = [img.trim()];
+
+      if (!payload.roommates?.max || Number.isNaN(Number(payload.roommates.max))) {
+        setError('Please specify how many roommates you can host.');
+        setLoading(false);
+        return;
+      }
+
+      payload.roommates = {
+        ...payload.roommates,
+        max: Number(payload.roommates.max)
+      };
+
       const res = await apiService.createListing(payload);
       if (res.success) {
+        if (res.user) {
+          updateUser(res.user);
+        }
         navigate(`/listing/${res.data._id}`);
       }
     } catch (e) {
-      setError(e.message || 'Failed to create listing');
+      const validationMessage = Array.isArray(e.errors) && e.errors.length > 0
+        ? e.errors.map((item) => item.message).join(', ')
+        : null;
+      setError(validationMessage || e.message || 'Failed to create listing');
     } finally {
       setLoading(false);
     }

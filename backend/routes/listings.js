@@ -3,8 +3,10 @@ import { body } from 'express-validator';
 import {
   getListings,
   getListing,
+  getMyListings,
   createListing,
   updateListing,
+  updateListingStatus,
   deleteListing
 } from '../controllers/listingController.js';
 import { getReviewsForListing, createReview, updateReview, deleteReview } from '../controllers/reviewController.js';
@@ -53,8 +55,10 @@ const listingValidation = [
 
 // Routes
 router.get('/', getListings);
+router.get('/owner/me', protect, getMyListings);
 router.get('/:id', getListing);
 router.post('/', protect, listingValidation, handleValidationErrors, createListing);
+router.patch('/:id/status', protect, updateListingStatus);
 router.put('/:id', protect, updateListing);
 router.delete('/:id', protect, deleteListing);
 
