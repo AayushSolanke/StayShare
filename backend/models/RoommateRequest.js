@@ -107,6 +107,11 @@ const roommateRequestSchema = new mongoose.Schema({
     max: 5,
     default: null
   },
+  reviewCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   responseRate: {
     type: Number,
     min: 0,

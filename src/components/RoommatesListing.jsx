@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -10,6 +10,7 @@ import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { ImageWithFallback } from './assets/ImageWithFallback';
 import apiService from '../services/api';
+import { useAuth } from '../App';
 import { 
   Search, 
   MapPin, 
@@ -23,6 +24,8 @@ import {
 } from 'lucide-react';
 
 export function RoommatesListing() {
+  const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
   const [roommates, setRoommates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,6 +40,10 @@ export function RoommatesListing() {
   });
   const [filtersInitialized, setFiltersInitialized] = useState(false);
   const [savedRoommates, setSavedRoommates] = useState([]);
+  const [messageLoadingId, setMessageLoadingId] = useState(null);
+  const [messageErrors, setMessageErrors] = useState({});
+
+  const currentUserId = user?._id?.toString();
 
   useEffect(() => {
     const load = async () => {
@@ -105,6 +112,43 @@ export function RoommatesListing() {
     if (lastActive.includes('hour')) return 'text-green-600';
     if (lastActive.includes('day') && parseInt(lastActive) <= 3) return 'text-yellow-600';
     return 'text-muted-foreground';
+  };
+
+  const handleMessage = async (roommate) => {
+    if (!roommate?._id) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      navigate('/auth');
+      return;
+    }
+
+    const ownerId = roommate.user?._id?.toString();
+    if (ownerId && ownerId === currentUserId) {
+      setMessageErrors((prev) => ({ ...prev, [roommate._id]: 'You cannot message your own roommate request.' }));
+      return;
+    }
+
+    setMessageErrors((prev) => {
+      const next = { ...prev };
+      delete next[roommate._id];
+      return next;
+    });
+
+    setMessageLoadingId(roommate._id);
+    try {
+      const res = await apiService.startConversation({ roommateRequestId: roommate._id });
+      if (!res.success) {
+        throw new Error(res.message || 'Unable to start conversation');
+      }
+      const conversationId = res.data?._id;
+      navigate(`/inbox${conversationId ? `?conversation=${conversationId}` : ''}`);
+    } catch (err) {
+      setMessageErrors((prev) => ({ ...prev, [roommate._id]: err.message || 'Unable to open messaging' }));
+    } finally {
+      setMessageLoadingId(null);
+    }
   };
 
   if (loading) {
@@ -291,6 +335,14 @@ export function RoommatesListing() {
                       <span className="text-muted-foreground">Room type:</span>
                       <Badge variant="outline" className="text-xs">{roommate.roomType}</Badge>
                     </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Reviews:</span>
+                      <span className="flex items-center gap-1 font-medium">
+                        <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                        {typeof roommate.rating === 'number' ? roommate.rating.toFixed(1) : '—'}
+                        <span className="text-muted-foreground">({roommate.reviewCount ?? 0})</span>
+                      </span>
+                    </div>
                   </div>
 
                   {Array.isArray(roommate.interests) && (
@@ -313,10 +365,20 @@ export function RoommatesListing() {
                   <Button asChild size="sm" className="flex-1">
                     <Link to={`/roommate/${roommate._id}`}>View Profile</Link>
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleMessage(roommate)}
+                    disabled={messageLoadingId === roommate._id || roommate.user?._id?.toString() === currentUserId}
+                    className="flex items-center gap-2"
+                  >
                     <MessageSquare className="h-4 w-4" />
+                    {messageLoadingId === roommate._id ? 'Opening…' : 'Message'}
                   </Button>
                 </div>
+                {messageErrors[roommate._id] && (
+                  <p className="text-xs text-destructive mt-2">{messageErrors[roommate._id]}</p>
+                )}
               </CardContent>
             </Card>
           ))}

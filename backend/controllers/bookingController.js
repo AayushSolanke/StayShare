@@ -1,6 +1,42 @@
 import Booking from '../models/Booking.js';
 import Listing from '../models/Listing.js';
 
+const adjustListingOccupancy = async (listingId, previousStatus, nextStatus) => {
+  if (!listingId) return null;
+
+  const becameConfirmed = previousStatus !== 'confirmed' && nextStatus === 'confirmed';
+  const leftConfirmed = previousStatus === 'confirmed' && nextStatus !== 'confirmed';
+
+  if (!becameConfirmed && !leftConfirmed) {
+    return null;
+  }
+
+  const listing = await Listing.findById(listingId);
+  if (!listing) {
+    return null;
+  }
+
+  const current = listing.roommates?.current ?? 0;
+  const max = listing.roommates?.max ?? Infinity;
+  let updated = current;
+
+  if (becameConfirmed && current < max) {
+    updated = Math.min(max, current + 1);
+  }
+
+  if (leftConfirmed && updated > 0) {
+    updated = Math.max(0, updated - 1);
+  }
+
+  if (updated !== current) {
+    listing.roommates.current = updated;
+    listing.updatedAt = new Date();
+    await listing.save();
+  }
+
+  return listing;
+};
+
 // @desc    Get all bookings for user
 // @route   GET /api/bookings
 // @access  Private
@@ -16,7 +52,7 @@ export const getUserBookings = async (req, res) => {
     const bookings = await Booking.find(query)
       .populate({
         path: 'listing',
-        select: 'title location price images landlord',
+  select: 'title location price images landlord roommates',
         populate: {
           path: 'landlord',
           select: 'name email phone'
@@ -138,7 +174,7 @@ export const createBooking = async (req, res) => {
 
     await booking.populate({
       path: 'listing',
-      select: 'title location price images landlord',
+  select: 'title location price images landlord roommates',
       populate: {
         path: 'landlord',
         select: 'name email phone'
@@ -185,6 +221,7 @@ export const updateBookingStatus = async (req, res) => {
       });
     }
 
+    const previousStatus = booking.status;
     booking.status = status;
     
     if (landlordResponse) {
@@ -195,10 +232,11 @@ export const updateBookingStatus = async (req, res) => {
     }
 
     await booking.save();
+    await adjustListingOccupancy(booking.listing._id, previousStatus, status);
     await booking.populate('user', 'name email phone');
     await booking.populate({
       path: 'listing',
-      select: 'title location price images landlord',
+      select: 'title location price images landlord roommates',
       populate: {
         path: 'landlord',
         select: 'name email phone'
@@ -250,11 +288,13 @@ export const cancelBooking = async (req, res) => {
       });
     }
 
+    const previousStatus = booking.status;
     booking.status = 'cancelled';
     await booking.save();
+    await adjustListingOccupancy(booking.listing, previousStatus, 'cancelled');
     await booking.populate({
       path: 'listing',
-      select: 'title location price images landlord',
+      select: 'title location price images landlord roommates',
       populate: {
         path: 'landlord',
         select: 'name email phone'
@@ -296,7 +336,7 @@ export const getLandlordBookings = async (req, res) => {
     const bookings = await Booking.find(query)
       .populate({
         path: 'listing',
-        select: 'title location price images landlord',
+        select: 'title location price images landlord roommates',
         populate: {
           path: 'landlord',
           select: 'name email phone'

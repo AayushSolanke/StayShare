@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -23,12 +23,14 @@ import {
   Shield,
   ArrowLeft,
   Share2,
-  Camera
+  Camera,
+  MessageSquare
 } from 'lucide-react';
 
 export function ListingDetails() {
   const { id } = useParams();
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [isSaved, setIsSaved] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [listing, setListing] = useState(null);
@@ -37,6 +39,8 @@ export function ListingDetails() {
   const [error, setError] = useState('');
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [contactError, setContactError] = useState('');
+  const [messageError, setMessageError] = useState('');
+  const [messageLoading, setMessageLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -53,6 +57,8 @@ export function ListingDetails() {
         setLoading(false);
       }
     };
+    setMessageError('');
+    setMessageLoading(false);
     if (id) load();
   }, [id]);
 
@@ -76,6 +82,31 @@ export function ListingDetails() {
 
   const isListingActive = listing.isActive !== false;
 
+  const handleStartConversation = async () => {
+    if (!isAuthenticated) {
+      navigate('/auth');
+      return;
+    }
+    if (!listing?._id) {
+      setMessageError('Listing details are still loading. Please try again in a moment.');
+      return;
+    }
+    setMessageError('');
+    setMessageLoading(true);
+    try {
+      const res = await apiService.startConversation(listing._id);
+      if (!res.success) {
+        throw new Error(res.message || 'Unable to start conversation');
+      }
+      const conversationId = res.data?._id;
+      navigate(`/inbox${conversationId ? `?conversation=${conversationId}` : ''}`);
+    } catch (err) {
+      setMessageError(err.message || 'Unable to open messaging');
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
   if (error || !listing) {
     return (
       <div className="min-h-screen bg-muted/30 py-8">
@@ -97,8 +128,8 @@ export function ListingDetails() {
 
     const { email, phone, name } = listing.landlord;
     const subject = encodeURIComponent(`StayShare enquiry about ${listing.title}`);
-  const greetingName = name ? name.split(' ')[0] : 'there';
-  const body = encodeURIComponent(`Hi ${greetingName},
+    const greetingName = name ? name.split(' ')[0] : 'there';
+    const body = encodeURIComponent(`Hi ${greetingName},
 
 I found your listing "${listing.title}" on StayShare and would love to discuss details.
 
@@ -440,6 +471,15 @@ Thanks!`);
                         <Mail className="h-4 w-4 mr-2" />
                         Contact Landlord
                       </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={handleStartConversation}
+                        disabled={messageLoading}
+                      >
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        {messageLoading ? 'Opening…' : 'Message Host'}
+                      </Button>
                     </>
                   ) : (
                     <Button asChild className="w-full">
@@ -449,6 +489,9 @@ Thanks!`);
                 </div>
                 {contactError && (
                   <p className="text-xs text-destructive text-center mt-2">{contactError}</p>
+                )}
+                {messageError && (
+                  <p className="text-xs text-destructive text-center mt-1">{messageError}</p>
                 )}
               </CardContent>
             </Card>

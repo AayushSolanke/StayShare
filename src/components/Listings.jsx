@@ -27,6 +27,7 @@ export function Listings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [priceBounds, setPriceBounds] = useState({ min: 0, max: 0 });
+  const minPriceFloor = 5000;
 
   useEffect(() => {
     const load = async () => {
@@ -51,7 +52,7 @@ export function Listings() {
 
               setFilters((prev) => ({
                 ...prev,
-                priceRange: [minPrice, maxPrice]
+                priceRange: [Math.min(minPrice, minPriceFloor), maxPrice]
               }));
             }
           }
@@ -80,23 +81,46 @@ export function Listings() {
     }));
   };
 
-  const effectiveMinPrice = filters.priceRange[0] || priceBounds.min || 0;
-  const effectiveMaxPrice = filters.priceRange[1] || priceBounds.max || Number.MAX_SAFE_INTEGER;
   const priceStep = useMemo(() => {
-    const span = priceBounds.max - priceBounds.min;
-    if (span <= 0) return 1000;
-    const roughStep = Math.max(500, Math.round(span / 60 / 500) * 500);
-    return roughStep || 1000;
+    const span = (priceBounds.max ?? 0) - (priceBounds.min ?? 0);
+    if (span <= 0) return 500;
+    const divisions = Math.max(10, Math.round(span / 1000));
+    const step = Math.floor(span / divisions / 100) * 100;
+    return Math.max(100, step);
   }, [priceBounds.max, priceBounds.min]);
+
+  const sliderBounds = useMemo(() => {
+    const lowerCandidate = priceBounds.min ?? minPriceFloor;
+    const lower = Math.min(lowerCandidate, minPriceFloor);
+    const rawUpper = Number.isFinite(priceBounds.max)
+      ? priceBounds.max
+      : Number.isFinite(priceBounds.min)
+        ? priceBounds.min
+        : minPriceFloor;
+    const upper = rawUpper > lower ? rawUpper : lower + priceStep;
+    return { min: lower, max: upper };
+  }, [priceBounds.min, priceBounds.max, minPriceFloor, priceStep]);
+
+  const minDistance = useMemo(() => {
+    const span = sliderBounds.max - sliderBounds.min;
+    if (span <= 0) return priceStep;
+    const distance = Math.max(priceStep, Math.round(span * 0.01 / priceStep) * priceStep);
+    return Math.max(priceStep, distance);
+  }, [sliderBounds.max, sliderBounds.min, priceStep]);
+
   const sliderValue = useMemo(() => {
     if (Array.isArray(filters.priceRange) && filters.priceRange.length === 2) {
-      return filters.priceRange;
+      const [minValue, maxValue] = filters.priceRange;
+      const clampedMin = Number.isFinite(minValue) ? Math.max(sliderBounds.min, minValue) : sliderBounds.min;
+      const clampedMax = Number.isFinite(maxValue) ? Math.min(sliderBounds.max, maxValue) : sliderBounds.max;
+      return [clampedMin, Math.max(clampedMin, clampedMax)];
     }
-    const fallbackMax = effectiveMaxPrice === Number.MAX_SAFE_INTEGER
-      ? Math.max(priceBounds.max, priceBounds.min + 1)
-      : effectiveMaxPrice;
-    return [effectiveMinPrice, fallbackMax];
-  }, [effectiveMaxPrice, effectiveMinPrice, filters.priceRange, priceBounds.max, priceBounds.min]);
+
+    return [sliderBounds.min, sliderBounds.max];
+  }, [filters.priceRange, sliderBounds]);
+
+  const effectiveMinPrice = sliderValue[0];
+  const effectiveMaxPrice = sliderValue[1];
 
   const toggleSaved = (listingId) => {
     setSavedListings(prev => 
@@ -194,11 +218,12 @@ export function Listings() {
                   <Slider
                     value={sliderValue}
                     onValueChange={(value) => handleFilterChange('priceRange', value)}
-                    max={Math.max(priceBounds.max, priceBounds.min + 1)}
-                    min={priceBounds.min || 0}
+                    max={sliderBounds.max}
+                    min={sliderBounds.min}
                     step={priceStep}
                     className="w-full"
-                    disabled={priceBounds.max <= priceBounds.min}
+                    disabled={sliderBounds.max <= sliderBounds.min}
+                    minStepsBetweenThumbs={Math.max(1, Math.round(minDistance / priceStep))}
                   />
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
@@ -352,7 +377,7 @@ export function Listings() {
               onClick={() => setFilters({
                 search: '',
                 location: 'all',
-                priceRange: [priceBounds.min, Math.max(priceBounds.max, priceBounds.min + 1)],
+                priceRange: [sliderBounds.min, sliderBounds.max],
                 roomType: 'all',
                 bedrooms: 'all'
               })}

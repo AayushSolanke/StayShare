@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -29,26 +29,92 @@ import {
 
 export function RoommateProfile() {
   const { id } = useParams();
-  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
   const [isSaved, setIsSaved] = useState(false);
   const [roommate, setRoommate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [messageError, setMessageError] = useState('');
+  const [messageLoading, setMessageLoading] = useState(false);
+  const currentUserId = user?._id?.toString();
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '', livedTogetherDuration: '' });
+  const [reviewSubmitError, setReviewSubmitError] = useState('');
+  const [reviewSubmitSuccess, setReviewSubmitSuccess] = useState('');
+
+  const loadRoommate = useCallback(async (showSpinner = true) => {
+    if (showSpinner) {
+      setLoading(true);
+    }
+    setError(null);
+    try {
+      const res = await apiService.getRoommateRequest(id);
+      if (res.success && res.data) {
+        setRoommate(res.data);
+      } else {
+        setError('Roommate not found');
+        setRoommate(null);
+      }
+    } catch (err) {
+      setError('Roommate not found');
+      setRoommate(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  const fetchReviews = useCallback(async () => {
+    setReviewsLoading(true);
+    setReviewError('');
+    try {
+      const res = await apiService.getRoommateReviews(id);
+      if (!res.success) {
+        throw new Error(res.message || 'Unable to load reviews');
+      }
+      setReviews(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      setReviewError(err.message || 'Unable to load reviews');
+      setReviews([]);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    apiService.getRoommateRequest(id)
-      .then(res => {
-        if (res.success && res.data) {
-          setRoommate(res.data);
-        } else {
-          setError('Roommate not found');
-        }
-      })
-      .catch(() => setError('Roommate not found'))
-      .finally(() => setLoading(false));
-  }, [id]);
+    setMessageError('');
+    setMessageLoading(false);
+    setReviewSubmitError('');
+    setReviewSubmitSuccess('');
+    loadRoommate();
+    fetchReviews();
+  }, [loadRoommate, fetchReviews]);
+
+  const myReview = useMemo(() => {
+    if (!currentUserId) {
+      return null;
+    }
+    return reviews.find((review) => review.reviewer?._id === currentUserId) || null;
+  }, [reviews, currentUserId]);
+
+  useEffect(() => {
+    if (myReview) {
+      setReviewForm({
+        rating: myReview.rating ?? 5,
+        comment: myReview.comment || '',
+        livedTogetherDuration: myReview.livedTogetherDuration || '',
+      });
+    } else {
+      setReviewForm({ rating: 5, comment: '', livedTogetherDuration: '' });
+    }
+  }, [myReview]);
+
+  const ownerId = roommate?.user?._id?.toString();
+  const isOwner = Boolean(ownerId && ownerId === currentUserId);
+  const canReview = isAuthenticated && !isOwner;
 
   // Build a view model from API shape (RoommateRequest)
   const vm = useMemo(() => {
@@ -70,39 +136,14 @@ export function RoommateProfile() {
       lifestyle: roommate.lifestyle || { cleanliness: 3, socialLevel: 3, smoking: false, pets: false, workSchedule: 'flexible', sleepSchedule: 'flexible' },
       idealRoommate: roommate.idealRoommate || '',
       dealBreakers: dealBreakersArray,
-      memberSince: roommate.createdAt || null
+      memberSince: roommate.createdAt || null,
+      rating: typeof roommate.rating === 'number' ? roommate.rating : null,
+      reviewCount: roommate.reviewCount ?? 0,
     };
   }, [roommate]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   if (error || !vm) return <div className="min-h-screen flex items-center justify-center text-red-500">{error || 'Roommate not found'}</div>;
-
-  const reviews = [
-    {
-      id: 1,
-      reviewer: "Rahul Verma",
-      rating: 5,
-      date: "2 months ago",
-      comment: "Anika was a fantastic flatmate! Very clean, considerate, and great to chat with over chai. Would definitely recommend.",
-      duration: "6 months"
-    },
-    {
-      id: 2,
-      reviewer: "Sneha Patil",
-      rating: 5,
-      date: "6 months ago",
-      comment: "Lovely person to live with. Always respectful and great at communication. We had a great time sharing festival sweets!",
-      duration: "8 months"
-    },
-    {
-      id: 3,
-      reviewer: "Amit Deshpande",
-      rating: 4,
-      date: "1 year ago",
-      comment: "Anika is reliable and friendly. Good at keeping common areas clean and always paid bills on time.",
-      duration: "4 months"
-    }
-  ];
 
   const formatMoveInDate = (dateString) => {
     // Using en-GB locale for DD/MM/YYYY format which is common in India
@@ -118,6 +159,135 @@ export function RoommateProfile() {
       month: 'long',
       year: 'numeric'
     });
+  };
+
+  const formatReviewDate = (value) => {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleDateString('en-GB', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch (err) {
+      return '';
+    }
+  };
+
+  const handleStartConversation = async () => {
+    if (!isAuthenticated) {
+      navigate('/auth');
+      return;
+    }
+
+    if (!roommate?._id) {
+      setMessageError('Roommate details are still loading. Please try again shortly.');
+      return;
+    }
+
+    if (isOwner) {
+      setMessageError('You cannot message your own roommate request.');
+      return;
+    }
+
+    setMessageError('');
+    setMessageLoading(true);
+    try {
+      const res = await apiService.startConversation({ roommateRequestId: roommate._id });
+      if (!res.success) {
+        throw new Error(res.message || 'Unable to start conversation');
+      }
+      const conversationId = res.data?._id;
+      navigate(`/inbox${conversationId ? `?conversation=${conversationId}` : ''}`);
+    } catch (err) {
+      setMessageError(err.message || 'Unable to open messaging');
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
+  const handleReviewFieldChange = (field) => (event) => {
+    const value = event.target.value;
+    setReviewForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleReviewSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!canReview) {
+      if (!isAuthenticated) {
+        navigate('/auth');
+      }
+      return;
+    }
+
+    const numericRating = Number(reviewForm.rating);
+    if (!Number.isFinite(numericRating) || numericRating < 1 || numericRating > 5) {
+      setReviewSubmitError('Please choose a rating between 1 and 5.');
+      return;
+    }
+
+    setReviewSubmitError('');
+    setReviewSubmitSuccess('');
+    setReviewSubmitting(true);
+
+    const payload = {
+      rating: numericRating,
+      comment: reviewForm.comment?.trim() || '',
+      livedTogetherDuration: reviewForm.livedTogetherDuration?.trim() || '',
+    };
+
+    try {
+      let response;
+      if (myReview) {
+        response = await apiService.updateRoommateReview(id, myReview._id, payload);
+      } else {
+        response = await apiService.createRoommateReview(id, payload);
+      }
+
+      if (!response.success) {
+        throw new Error(response.message || 'Unable to save review');
+      }
+
+      const savedReview = response.data;
+      setReviews((prev) => {
+        if (myReview) {
+          return prev.map((review) => (review._id === savedReview._id ? savedReview : review));
+        }
+        return [savedReview, ...prev];
+      });
+      setReviewSubmitSuccess(myReview ? 'Review updated successfully.' : 'Review added successfully.');
+      await loadRoommate(false);
+    } catch (err) {
+      setReviewSubmitError(err.message || 'Unable to save review');
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleDeleteReview = async () => {
+    if (!myReview) {
+      return;
+    }
+
+    setReviewSubmitError('');
+    setReviewSubmitSuccess('');
+    setReviewSubmitting(true);
+
+    try {
+      const response = await apiService.deleteRoommateReview(id, myReview._id);
+      if (!response.success) {
+        throw new Error(response.message || 'Unable to delete review');
+      }
+
+  setReviews((prev) => prev.filter((review) => review._id !== myReview._id));
+  setReviewSubmitSuccess('Review deleted.');
+  await loadRoommate(false);
+    } catch (err) {
+      setReviewSubmitError(err.message || 'Unable to delete review');
+    } finally {
+      setReviewSubmitting(false);
+    }
   };
 
   return (
@@ -181,7 +351,9 @@ export function RoommateProfile() {
                       <div className="text-center">
                         <div className="flex items-center justify-center mb-1">
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
-                          <span className="font-medium">{roommate?.rating ?? '—'}</span>
+                          <span className="font-medium">
+                            {typeof roommate?.rating === 'number' ? roommate.rating.toFixed(1) : '—'}
+                          </span>
                         </div>
                         <p className="text-xs text-muted-foreground">Rating</p>
                       </div>
@@ -374,29 +546,135 @@ export function RoommateProfile() {
               <TabsContent value="reviews" className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Reviews from Previous Flatmates</CardTitle>
+                    <CardTitle className="flex items-center justify-between gap-2">
+                      <span>Roommate Reviews</span>
+                      <span className="text-sm text-muted-foreground">
+                        {vm.reviewCount
+                          ? `${vm.reviewCount} ${vm.reviewCount === 1 ? 'review' : 'reviews'}`
+                          : 'No reviews yet'}
+                      </span>
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      {reviews.map((review) => (
-                        <div key={review.id} className="border-b border-border pb-4 last:border-b-0">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <h4 className="font-medium">{review.reviewer}</h4>
-                              <p className="text-sm text-muted-foreground">
-                                Lived together for {review.duration} • {review.date}
-                              </p>
+                  <CardContent className="space-y-6">
+                    {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
+
+                    {reviewsLoading ? (
+                      <p className="text-sm text-muted-foreground">Loading reviews…</p>
+                    ) : reviews.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No reviews yet. Share your experience if you've stayed together.
+                      </p>
+                    ) : (
+                      <div className="space-y-6">
+                        {reviews.map((review) => {
+                          const stars = Math.max(0, Math.min(5, Math.round(review.rating || 0)));
+                          return (
+                            <div key={review._id} className="border-b border-border pb-4 last:border-b-0">
+                              <div className="flex items-start justify-between gap-4 mb-2">
+                                <div>
+                                  <h4 className="font-medium">{review.reviewer?.name || 'Community member'}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    {review.livedTogetherDuration ? `${review.livedTogetherDuration} • ` : ''}
+                                    {formatReviewDate(review.createdAt)}
+                                  </p>
+                                </div>
+                                <div className="flex items-center">
+                                  {Array.from({ length: stars }).map((_, index) => (
+                                    <Star key={index} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                  ))}
+                                </div>
+                              </div>
+                              {review.comment && <p className="text-muted-foreground">{review.comment}</p>}
+                              {review.reviewer?._id === currentUserId && (
+                                <Badge variant="secondary" className="mt-2 text-xs">Your review</Badge>
+                              )}
                             </div>
-                            <div className="flex items-center">
-                              {[...Array(review.rating)].map((_, i) => (
-                                <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {canReview && (
+                      <div className="border-t border-border pt-4">
+                        <h4 className="font-medium mb-3">{myReview ? 'Update your review' : 'Leave a review'}</h4>
+                        <form onSubmit={handleReviewSubmit} className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <label htmlFor="roommate-rating" className="text-sm font-medium">
+                              Rating
+                            </label>
+                            <select
+                              id="roommate-rating"
+                              className="border rounded px-2 py-1 text-sm"
+                              value={reviewForm.rating}
+                              onChange={handleReviewFieldChange('rating')}
+                              disabled={reviewSubmitting}
+                            >
+                              {[1, 2, 3, 4, 5].map((value) => (
+                                <option key={value} value={value}>
+                                  {value}
+                                </option>
                               ))}
-                            </div>
+                            </select>
                           </div>
-                          <p className="text-muted-foreground">{review.comment}</p>
-                        </div>
-                      ))}
-                    </div>
+                          <div>
+                            <label htmlFor="roommate-duration" className="text-sm font-medium">
+                              How long did you stay together?
+                            </label>
+                            <input
+                              id="roommate-duration"
+                              type="text"
+                              className="w-full border rounded px-3 py-2 text-sm mt-1"
+                              placeholder="e.g. 6 months, 1 semester"
+                              value={reviewForm.livedTogetherDuration}
+                              onChange={handleReviewFieldChange('livedTogetherDuration')}
+                              disabled={reviewSubmitting}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="roommate-comment" className="text-sm font-medium">
+                              Share a few details
+                            </label>
+                            <textarea
+                              id="roommate-comment"
+                              className="w-full border rounded px-3 py-2 text-sm mt-1"
+                              rows={4}
+                              placeholder="What was it like sharing a flat?"
+                              value={reviewForm.comment}
+                              onChange={handleReviewFieldChange('comment')}
+                              disabled={reviewSubmitting}
+                            />
+                          </div>
+                          {reviewSubmitError && <p className="text-xs text-destructive">{reviewSubmitError}</p>}
+                          {reviewSubmitSuccess && <p className="text-xs text-emerald-600">{reviewSubmitSuccess}</p>}
+                          <div className="flex items-center gap-2">
+                            <Button type="submit" disabled={reviewSubmitting} className="inline-flex items-center gap-2">
+                              {reviewSubmitting ? 'Saving…' : myReview ? 'Update review' : 'Submit review'}
+                            </Button>
+                            {myReview && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={handleDeleteReview}
+                                disabled={reviewSubmitting}
+                              >
+                                Delete review
+                              </Button>
+                            )}
+                          </div>
+                        </form>
+                      </div>
+                    )}
+
+                    {!isAuthenticated && !isOwner && (
+                      <div className="border-t border-border pt-4">
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Want to share your flatshare experience? Log in to leave a review.
+                        </p>
+                        <Button asChild variant="outline" size="sm">
+                          <Link to="/auth">Login to review</Link>
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -415,9 +693,13 @@ export function RoommateProfile() {
                 <div className="space-y-3">
                   {isAuthenticated ? (
                     <>
-                      <Button className="w-full">
+                      <Button
+                        className="w-full"
+                        onClick={handleStartConversation}
+                        disabled={messageLoading || isOwner}
+                      >
                         <MessageSquare className="h-4 w-4 mr-2" />
-                        Send Message
+                        {messageLoading ? 'Opening…' : 'Send Message'}
                       </Button>
                       <Button variant="outline" className="w-full">
                         <Phone className="h-4 w-4 mr-2" />
@@ -429,6 +711,7 @@ export function RoommateProfile() {
                       <Link to="/auth">Login to Contact</Link>
                     </Button>
                   )}
+                  {messageError && <p className="text-xs text-destructive text-center">{messageError}</p>}
                 </div>
               </CardContent>
             </Card>
@@ -503,8 +786,14 @@ export function RoommateProfile() {
                     <span className="text-sm text-muted-foreground">Average Rating</span>
                     <div className="flex items-center">
                       <Star className="h-3 w-3 fill-yellow-400 text-yellow-400 mr-1" />
-                      <span className="font-medium">{roommate?.rating ?? '—'}</span>
+                      <span className="font-medium">
+                        {typeof roommate?.rating === 'number' ? roommate.rating.toFixed(1) : '—'}
+                      </span>
                     </div>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Review Count</span>
+                    <span className="font-medium">{roommate?.reviewCount ?? 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Posted</span>

@@ -167,6 +167,47 @@ class ApiService {
     return this.patch(`/listings/${id}/status`, statusData);
   }
 
+  // Conversations methods
+  async getConversations() {
+    return this.get('/conversations');
+  }
+
+  async startConversation(listingOrPayload, participantId) {
+    let payload;
+    if (listingOrPayload && typeof listingOrPayload === 'object' && !Array.isArray(listingOrPayload)) {
+      payload = { ...listingOrPayload };
+    } else {
+      payload = {};
+      if (listingOrPayload) {
+        payload.listingId = listingOrPayload;
+      }
+      if (participantId) {
+        payload.participantId = participantId;
+      }
+    }
+
+    return this.post('/conversations', payload);
+  }
+
+  async getConversationMessages(conversationId, params = {}) {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        search.append(key, value);
+      }
+    });
+    const query = search.toString();
+    return this.get(`/conversations/${conversationId}/messages${query ? `?${query}` : ''}`);
+  }
+
+  async sendConversationMessage(conversationId, body) {
+    return this.post(`/conversations/${conversationId}/messages`, { body });
+  }
+
+  async markConversationRead(conversationId) {
+    return this.post(`/conversations/${conversationId}/read`, {});
+  }
+
   // Bookings methods
   async getBookings() {
     return this.get('/bookings');
@@ -223,6 +264,22 @@ class ApiService {
 
   async deleteRoommateRequest(id) {
     return this.delete(`/roommates/${id}`);
+  }
+
+  async getRoommateReviews(roommateRequestId) {
+    return this.get(`/roommates/${roommateRequestId}/reviews`);
+  }
+
+  async createRoommateReview(roommateRequestId, reviewData) {
+    return this.post(`/roommates/${roommateRequestId}/reviews`, reviewData);
+  }
+
+  async updateRoommateReview(roommateRequestId, reviewId, reviewData) {
+    return this.put(`/roommates/${roommateRequestId}/reviews/${reviewId}`, reviewData);
+  }
+
+  async deleteRoommateReview(roommateRequestId, reviewId) {
+    return this.delete(`/roommates/${roommateRequestId}/reviews/${reviewId}`);
   }
 
   // Users methods

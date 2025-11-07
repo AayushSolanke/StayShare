@@ -13,6 +13,7 @@ import { PostRoommateRequest } from './components/PostRoommateRequest';
 import { Navbar } from './components/Navbar';
 import { CreateListing } from './components/CreateListing';
 import HostDashboard from './components/HostDashboard';
+import { Inbox } from './components/Inbox';
 import apiService from './services/api';
 
 // Auth Context
@@ -153,6 +154,7 @@ function App() {
             <Route path="/roommates" element={<RoommatesListing />} />
             <Route path="/roommate/:id" element={<RoommateProfile />} />
             <Route path="/post-roommate" element={isAuthenticated ? <PostRoommateRequest /> : <Navigate to="/auth" />} />
+            <Route path="/inbox" element={isAuthenticated ? <Inbox /> : <Navigate to="/auth" />} />
             {/* Catch-all route for unmatched paths */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

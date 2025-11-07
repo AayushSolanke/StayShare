@@ -8,6 +8,12 @@ import {
   deleteRoommateRequest,
   getMyRoommateRequests
 } from '../controllers/roommateController.js';
+import {
+  getRoommateReviews,
+  createRoommateReview,
+  updateRoommateReview,
+  deleteRoommateReview,
+} from '../controllers/roommateReviewController.js';
 import { protect, optionalAuth } from '../middleware/auth.js';
 import { handleValidationErrors } from '../middleware/validation.js';
 
@@ -74,5 +80,52 @@ router.get('/:id', getRoommateRequest);
 router.post('/', protect, roommateRequestValidation, handleValidationErrors, validateBudgetRange, createRoommateRequest);
 router.put('/:id', protect, updateRoommateRequest);
 router.delete('/:id', protect, deleteRoommateRequest);
+
+// Roommate reviews
+const roommateReviewCreateValidation = [
+  body('rating')
+    .isInt({ min: 1, max: 5 })
+    .withMessage('Rating must be between 1 and 5'),
+  body('comment')
+    .optional()
+    .isLength({ max: 1000 })
+    .withMessage('Comment cannot exceed 1000 characters'),
+  body('livedTogetherDuration')
+    .optional()
+    .isLength({ max: 120 })
+    .withMessage('Duration cannot exceed 120 characters'),
+];
+
+const roommateReviewUpdateValidation = [
+  body('rating')
+    .optional()
+    .isInt({ min: 1, max: 5 })
+    .withMessage('Rating must be between 1 and 5'),
+  body('comment')
+    .optional()
+    .isLength({ max: 1000 })
+    .withMessage('Comment cannot exceed 1000 characters'),
+  body('livedTogetherDuration')
+    .optional()
+    .isLength({ max: 120 })
+    .withMessage('Duration cannot exceed 120 characters'),
+];
+
+router.get('/:id/reviews', getRoommateReviews);
+router.post(
+  '/:id/reviews',
+  protect,
+  roommateReviewCreateValidation,
+  handleValidationErrors,
+  createRoommateReview,
+);
+router.put(
+  '/:id/reviews/:reviewId',
+  protect,
+  roommateReviewUpdateValidation,
+  handleValidationErrors,
+  updateRoommateReview,
+);
+router.delete('/:id/reviews/:reviewId', protect, deleteRoommateReview);
 
 export default router;

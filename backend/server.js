@@ -14,6 +14,7 @@ import listingRoutes from './routes/listings.js';
 import bookingRoutes from './routes/bookings.js';
 import roommateRoutes from './routes/roommates.js';
 import userRoutes from './routes/users.js';
+import conversationRoutes from './routes/conversations.js';
 
 // Import passport configuration
 import './config/passport.js';
@@ -103,6 +104,7 @@ app.use('/api/listings', listingRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/roommates', roommateRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/conversations', conversationRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { useAuth } from '../App';
-import { Home, Search, Users, Calendar, User, LogOut, Plus, LayoutDashboard } from 'lucide-react';
+import { Home, Search, Users, Calendar, User, LogOut, Plus, LayoutDashboard, MessageSquare } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +32,7 @@ export function Navbar() {
   const authenticatedItems = [
     { path: '/my-bookings', label: 'My Bookings', icon: Calendar },
     { path: '/post-roommate', label: 'Post Request', icon: Plus },
+    { path: '/inbox', label: 'Inbox', icon: MessageSquare },
   ];
 
   const landlordItems = user?.role === 'landlord'
